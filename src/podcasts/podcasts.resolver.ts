@@ -16,28 +16,29 @@ export class PodcastsResolver {
   constructor(private readonly podcastsService: PodcastsService) {}
 
   @Query((returns) => [Podcast])
-  getAll(): Podcast[] {
+  getAll(): Promise<Podcast[]> {
     return this.podcastsService.getAll();
   }
   @Query((returns) => Podcast)
-  getOne(@Args('id') podcastId: Number): Podcast {
+  getOne(@Args('id') podcastId: number): Promise<Podcast> {
     return this.podcastsService.getOne(podcastId);
   }
   @Mutation((returns) => CreatePodcastsOutput)
   create(
     @Args('input') podcastData: CreatePodcastsInput,
-  ): CreatePodcastsOutput {
+  ): Promise<CreatePodcastsOutput> {
     return this.podcastsService.create(podcastData);
   }
   @Mutation((returns) => MutationOutput)
-  delete(@Args('id') podcastId: Number): MutationOutput {
+  delete(@Args('id') podcastId: number): Promise<MutationOutput> {
     return this.podcastsService.delete(podcastId);
   }
   @Mutation((returns) => MutationOutput)
   update(
+    @Args('podcastId') podcastId: number,
     @Args('input') updatePodcastInput: UpdatePodcastInput,
-  ): MutationOutput {
-    return this.podcastsService.update(updatePodcastInput);
+  ): Promise<MutationOutput> {
+    return this.podcastsService.update(podcastId, updatePodcastInput);
   }
   @Query((returns) => [Episode])
   getEpisodes(@Args('podcastId') podcastId: Number): Episode[] {
@@ -45,7 +46,7 @@ export class PodcastsResolver {
   }
   @Mutation((returns) => MutationOutput)
   createEpisodes(
-    @Args('podcastId') podcastId: Number,
+    @Args('podcastId') podcastId: number,
     @Args('input') episodeData: CreateEpisodesInput,
   ): MutationOutput {
     return this.podcastsService.createEpisodes(podcastId, episodeData);

@@ -1,11 +1,15 @@
-import { Episode } from './podcasts/entities/episode.entity';
 import { Module } from '@nestjs/common';
 import { PodcastsModule } from './podcasts/podcasts.module';
 import { GraphQLModule } from '@nestjs/graphql';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Podcast } from './podcasts/entities/podcast.entity';
+import { ConfigModule } from '@nestjs/config';
+import configuration from './config/configuration';
+
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      load: [configuration],
+    }),
     TypeOrmModule.forRoot(),
     GraphQLModule.forRoot({
       autoSchemaFile: true,
