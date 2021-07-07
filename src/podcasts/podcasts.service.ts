@@ -1,5 +1,10 @@
-import { PodcastOutput } from './dtos/podcast.dto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  EpisodeOutput,
+  EpisodesOutput,
+  PodcastOutput,
+  PodcastsOutput,
+} from './dtos/podcast.dto';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MutationOutput } from 'src/common/dtos/output.dto';
 import { Repository } from 'typeorm';
@@ -10,19 +15,35 @@ import {
 import { UpdatePodcastInput } from './dtos/update-podcast.dto';
 import { Episode } from './entities/episode.entity';
 import { Podcast } from './entities/podcast.entity';
+import { CreateEpisodesOutput } from './dtos/create-episodes.dtos';
 
 @Injectable()
 export class PodcastsService {
   constructor(
     @InjectRepository(Podcast) private podcasts: Repository<Podcast>,
+    @InjectRepository(Episode) private episodes: Repository<Episode>,
   ) {}
 
-  getAll(): Promise<Podcast[]> {
-    return this.podcasts.find();
-  }
-  async getOne(id: number): Promise<PodcastOutput> {
+  async getAllPodcasts(): Promise<PodcastsOutput> {
     try {
-      const podcast = await this.podcasts.findOne({ id });
+      const podcasts = await this.podcasts.find({ relations: ['episodes'] });
+      return {
+        ok: true,
+        podcasts,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error,
+      };
+    }
+  }
+  async getPodcast(id: number): Promise<PodcastOutput> {
+    try {
+      const podcast = await this.podcasts.findOne(
+        { id },
+        { relations: ['episodes'] },
+      );
       if (!podcast) {
         throw new NotFoundException(`Podcast is Not Found By Id: ${id}`);
       }
@@ -37,13 +58,16 @@ export class PodcastsService {
       };
     }
   }
-  async create(podcastData): Promise<CreatePodcastsOutput> {
+  async createPodcast({ title, category }): Promise<CreatePodcastsOutput> {
     try {
-      await this.podcasts.create({
-        ...podcastData,
+      const newPodcast = this.podcasts.create({
+        title,
+        category,
       });
+      const { id } = await this.podcasts.save(newPodcast);
       return {
         ok: true,
+        id,
       };
     } catch (error) {
       return {
@@ -52,7 +76,7 @@ export class PodcastsService {
       };
     }
   }
-  async delete(id: number): Promise<MutationOutput> {
+  async deletePodcast(id: number): Promise<MutationOutput> {
     try {
       await this.podcasts.delete(id);
       return {
@@ -65,12 +89,20 @@ export class PodcastsService {
       };
     }
   }
-  async update(
-    podcastId: number,
-    updateData: UpdatePodcastInput,
-  ): Promise<MutationOutput> {
+  async updatePodcast({
+    id,
+    payload,
+  }: UpdatePodcastInput): Promise<MutationOutput> {
     try {
-      await this.podcasts.update(podcastId, { ...updateData });
+      const { podcast, ok, error } = await this.getPodcast(id);
+      if (!ok) {
+        return {
+          ok,
+          error,
+        };
+      }
+      const updatedPodcast: Podcast = { ...podcast, ...payload };
+      await this.podcasts.save(updatedPodcast);
       return {
         ok: true,
       };
@@ -81,24 +113,94 @@ export class PodcastsService {
       };
     }
   }
-  async getEpisodes(podcastId: number): Promise<Episode[]> {
-    const podcast = await this.getOne(podcastId);
-    return podcast.episodes;
+  async getEpisodes(podcastId: number): Promise<EpisodesOutput> {
+    try {
+      const { podcast, ok, error } = await this.getPodcast(podcastId);
+      if (!ok) {
+        return { ok, error };
+      }
+      const episodes = podcast.episodes;
+      return {
+        ok: true,
+        episodes,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error,
+      };
+    }
+  }
+  async getEpisode(
+    podcastId: number,
+    episodeId: number,
+  ): Promise<EpisodeOutput> {
+    try {
+      const { episodes, ok, error } = await this.getEpisodes(podcastId);
+      if (!ok || !episodes) {
+        return {
+          ok: false,
+          error: "Couldn't found episode",
+        };
+      }
+      const episode = episodes.find((episode) => episode.id === episodeId);
+      if (!episode) {
+        throw new NotFoundException(
+          `In Podcast Id : ${podcastId}, Not Found this episode Id : ${episodeId}`,
+        );
+      }
+      return {
+        ok: true,
+        episode,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error,
+      };
+    }
   }
   async createEpisodes(
     podcastId: number,
-    episodeData,
+    { title },
+  ): Promise<CreateEpisodesOutput> {
+    try {
+      const { podcast, ok, error } = await this.getPodcast(podcastId);
+      const newEpisode = this.episodes.create({ title, podcast });
+      const { id } = await this.episodes.save(newEpisode);
+      if (!ok || !podcast) {
+        return {
+          ok: false,
+          error: "Couldn't create episodes",
+        };
+      }
+      return {
+        ok: true,
+        id,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error,
+      };
+    }
+  }
+  async deleteEpisode(
+    podcastId: number,
+    episodeId: number,
   ): Promise<MutationOutput> {
     try {
-      const { podcast, ok, error } = await this.getOne(podcastId);
-      const episodes = this.getEpisodes(podcastId);
-      await this.podcasts.update({});
-      episodes.push({
-        id,
-        title: episodeData.title,
-        rating: episodeData.rating,
-        podcast: episodeData.podcast,
-      });
+      const { episode, ok, error } = await this.getEpisode(
+        podcastId,
+        episodeId,
+      );
+      if (!ok) {
+        return {
+          ok,
+          error,
+        };
+      }
+      await this.episodes.delete({ id: episode.id });
       return {
         ok: true,
       };
@@ -109,44 +211,23 @@ export class PodcastsService {
       };
     }
   }
-  getEpisode(podcastId: number, episodeId: number): Episode {
-    const podcast = this.getOne(podcastId);
-    const episode = podcast.episodes.find(
-      (episode) => episode.id === episodeId,
-    );
-    if (!episode) {
-      throw new NotFoundException(
-        `In Podcast Id : ${podcastId}, Not Found this episode Id : ${episodeId}`,
-      );
-    }
-    return episode;
-  }
-  deleteEpisode(podcastId: number, episodeId: number) {
+  async updateEpisode(
+    podcastId: number,
+    episodeId: number,
+    updateData,
+  ): Promise<MutationOutput> {
     try {
-      const podcast = this.getOne(podcastId);
-      this.getEpisode(podcastId, episodeId);
-      podcast.episodes = podcast.episodes.filter(
-        (episode) => episode.id !== +episodeId,
+      const { episode, ok, error } = await this.getEpisode(
+        podcastId,
+        episodeId,
       );
-      return {
-        ok: true,
-      };
-    } catch (error) {
-      return {
-        ok: false,
-        error,
-      };
-    }
-  }
-  updateEpisode(podcastId: number, episodeId: number, updateData) {
-    try {
-      const podcast = this.getOne(podcastId);
-      const episode = this.getEpisode(podcastId, episodeId);
-      this.deleteEpisode(podcastId, episodeId);
-      podcast.episodes.push({
-        ...episode,
-        ...updateData,
-      });
+      if (!ok) {
+        return {
+          ok,
+          error,
+        };
+      }
+      await this.episodes.update({ id: episode.id }, { ...updateData });
       return {
         ok: true,
       };

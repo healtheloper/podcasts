@@ -1,25 +1,23 @@
 import { Podcast } from './podcast.entity';
 import { Field, InputType, ObjectType } from '@nestjs/graphql';
-import { IsNumber, IsString } from 'class-validator';
+import { IsNumber, IsString, Max, Min } from 'class-validator';
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { CoreEntity } from 'src/common/entities/core.entity';
 
 @InputType('EpisodeInputType', { isAbstract: true })
 @ObjectType()
 @Entity()
-export class Episode {
-  @Field((returns) => Number)
-  @PrimaryGeneratedColumn()
-  @IsNumber()
-  id: number;
-
+export class Episode extends CoreEntity {
   @Field((returns) => String)
   @Column()
   @IsString()
   title: string;
 
   @Field((returns) => Number)
-  @Column()
+  @Column({ default: 0 })
   @IsNumber()
+  @Min(0)
+  @Max(5)
   rating: number;
 
   @Field((returns) => Podcast)
